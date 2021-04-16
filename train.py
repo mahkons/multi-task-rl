@@ -9,6 +9,7 @@ import random
 import itertools
 
 from PPO import PPO
+from logger import init_logger, log
 from params import ENV_NAMES, MIN_EPISODES_PER_UPDATE, MIN_TRANSITIONS_PER_UPDATE, ITERATIONS, LR
 
 device = torch.device("cpu")
@@ -41,6 +42,8 @@ def sample_episode(env, agent):
 
 
 def train():
+    for env_name in ENV_NAMES:
+        log().add_plot(env_name + "_reward", ("episode", "step", "reward"))
     envs = [gym.make(name) for name in ENV_NAMES]
     agents = [PPO(state_dim=env.observation_space.shape[0], action_dim=env.action_space.shape[0], device=device) for env in envs]
 
@@ -48,7 +51,6 @@ def train():
     steps_sampled = [0 for _ in range(len(envs))]
 
     optimizer = torch.optim.Adam(itertools.chain(*[agent.parameters() for agent in agents]), lr=LR)
-
     for i in range(ITERATIONS):
         all_trajectories = [[] for _ in range(len(envs))]
         
@@ -58,6 +60,8 @@ def train():
                 traj = sample_episode(env, agent)
                 steps_cnt += len(traj)
                 all_trajectories[j].append(traj)
+                reward = sum([r for _, _, r, _ in traj])
+                log().add_plot_point(env_name + "_reward", (episodes_sampled[j] + len(all_trajectories), steps_sampled[j] + steps_cnt, reward))
             episodes_sampled[j] += len(all_trajectories[j])
             steps_sampled[j] += steps_cnt
 
@@ -66,12 +70,13 @@ def train():
             optimizer.zero_grad()
             sum(losses).backward()
             optimizer.step()
+        
 
         
         if (i + 1) % (ITERATIONS//100) == 0:
-            for j, (env, env_name, agent) in enumerate(zip(envs, ENV_NAMES, agents)):
-                rewards = evaluate_policy(env, agent, 1) # TODO more?
-                print(f"Step: {i+1}, ENV: {env_name}, Reward mean: {np.mean(rewards)}, Reward std: {np.std(rewards)}, Episodes: {episodes_sampled[j]}, Steps: {steps_sampled[j]}")
+            log().save_logs()
+    log().save_logs()
+
 
 
 def init_random_seeds(RANDOM_SEED):
@@ -82,4 +87,5 @@ def init_random_seeds(RANDOM_SEED):
 
 if __name__ == "__main__":
     init_random_seeds(23)
+    init_logger("logdir", "tmp")
     train()
