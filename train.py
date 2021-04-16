@@ -61,7 +61,8 @@ def train():
                 steps_cnt += len(traj)
                 all_trajectories[j].append(traj)
                 reward = sum([r for _, _, r, _ in traj])
-                log().add_plot_point(env_name + "_reward", (episodes_sampled[j] + len(all_trajectories), steps_sampled[j] + steps_cnt, reward))
+                print(ENV_NAMES[i], reward)
+                log().add_plot_point(ENV_NAMES[i] + "_reward", (episodes_sampled[j] + len(all_trajectories), steps_sampled[j] + steps_cnt, reward))
             episodes_sampled[j] += len(all_trajectories[j])
             steps_sampled[j] += steps_cnt
 
