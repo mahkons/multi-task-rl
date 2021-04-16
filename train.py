@@ -12,7 +12,7 @@ from PPO import PPO
 from logger import init_logger, log
 from params import ENV_NAMES, MIN_EPISODES_PER_UPDATE, MIN_TRANSITIONS_PER_UPDATE, ITERATIONS, LR
 
-device = torch.device("cpu")
+device = torch.device("cuda")
 
 
 def evaluate_policy(env, agent, episodes):
@@ -61,8 +61,7 @@ def train():
                 steps_cnt += len(traj)
                 all_trajectories[j].append(traj)
                 reward = sum([r for _, _, r, _ in traj])
-                print(ENV_NAMES[i], reward)
-                log().add_plot_point(ENV_NAMES[i] + "_reward", (episodes_sampled[j] + len(all_trajectories), steps_sampled[j] + steps_cnt, reward))
+                log().add_plot_point(ENV_NAMES[j] + "_reward", (episodes_sampled[j] + len(all_trajectories[j]), steps_sampled[j] + steps_cnt, reward))
             episodes_sampled[j] += len(all_trajectories[j])
             steps_sampled[j] += steps_cnt
 
@@ -72,10 +71,7 @@ def train():
             sum(losses).backward()
             optimizer.step()
         
-
-        
-        if (i + 1) % (ITERATIONS//100) == 0:
-            log().save_logs()
+        log().save_logs()
     log().save_logs()
 
 
