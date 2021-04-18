@@ -10,7 +10,7 @@ import itertools
 
 from PPO import PPO
 from logger import init_logger, log
-from params import ENV_NAMES, MIN_EPISODES_PER_UPDATE, MIN_TRANSITIONS_PER_UPDATE, ITERATIONS, LR
+from params import ENV_NAMES, ENV_NAMES_SHORT, MIN_EPISODES_PER_UPDATE, MIN_TRANSITIONS_PER_UPDATE, ITERATIONS, LR
 
 device = torch.device("cuda")
 
@@ -21,7 +21,6 @@ def evaluate_policy(env, agent, episodes):
         done = False
         state = env.reset()
         total_reward = 0.
-        
         while not done:
             state, reward, done, _ = env.step(agent.act(state)[0])
             total_reward += reward
@@ -41,10 +40,10 @@ def sample_episode(env, agent):
     return trajectory
 
 
-def train():
-    for env_name in ENV_NAMES:
+def train(env_names):
+    for env_name in env_names:
         log().add_plot(env_name + "_reward", ("episode", "step", "reward"))
-    envs = [gym.make(name) for name in ENV_NAMES]
+    envs = [gym.make(name) for name in env_names]
     agents = [PPO(state_dim=env.observation_space.shape[0], action_dim=env.action_space.shape[0], device=device) for env in envs]
 
     episodes_sampled = [0 for _ in range(len(envs))]
@@ -61,7 +60,7 @@ def train():
                 steps_cnt += len(traj)
                 all_trajectories[j].append(traj)
                 reward = sum([r for _, _, r, _ in traj])
-                log().add_plot_point(ENV_NAMES[j] + "_reward", (episodes_sampled[j] + len(all_trajectories[j]), steps_sampled[j] + steps_cnt, reward))
+                log().add_plot_point(env_names[j] + "_reward", (episodes_sampled[j] + len(all_trajectories[j]), steps_sampled[j] + steps_cnt, reward))
             episodes_sampled[j] += len(all_trajectories[j])
             steps_sampled[j] += steps_cnt
 
@@ -85,4 +84,4 @@ def init_random_seeds(RANDOM_SEED):
 if __name__ == "__main__":
     init_random_seeds(23)
     init_logger("logdir", "tmp")
-    train()
+    train(ENV_NAMES_SHORT)
