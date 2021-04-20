@@ -7,18 +7,25 @@ from params import LR, GAMMA, LAMBDA, CLIP, ENTROPY_COEF, VALUE_COEFF, BATCHES_P
 
 
 class PPO():
-    def __init__(self, state_dim, action_dim, device):
+    def __init__(self, state_dim, action_dim, num_shared, device):
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.device = device
 
-        self.actor = Actor(state_dim, action_dim).to(device)
-        self.critic = Critic(state_dim).to(device)
-        self.optimizer = torch.optim.Adam(itertools.chain(self.actor.parameters(), self.critic.parameters()), LR)
+        self.actor = Actor(state_dim, action_dim, num_shared).to(device)
+        self.critic = Critic(state_dim, num_shared).to(device)
 
     def parameters(self):
         return itertools.chain(self.actor.parameters(), self.critic.parameters())
 
+    def first_parameters(self):
+        return itertools.chain(self.actor.first_parameters(), self.critic.first_parameters())
+
+    def shared_parameters(self):
+        return itertools.chain(self.actor.shared_parameters(), self.critic.shared_parameters())
+
+    def rest_parameters(self):
+        return itertools.chain(self.actor.rest_parameters(), self.critic.rest_parameters())
 
     def _calc_loss(self, state, action, old_log_prob, expected_values, gae):
         new_log_prob, action_distr = self.actor.compute_proba(state, action)
@@ -53,7 +60,6 @@ class PPO():
             # ugly code yeah =)
             # optimization outside
             yield loss
-
 
 
     def _compute_lambda_returns_and_gae(self, trajectory):

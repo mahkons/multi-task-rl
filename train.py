@@ -10,7 +10,8 @@ import itertools
 
 from PPO import PPO
 from logger import init_logger, log
-from params import ENV_NAMES, ENV_NAMES_SHORT, MIN_EPISODES_PER_UPDATE, MIN_TRANSITIONS_PER_UPDATE, ITERATIONS, LR
+from params import ENV_NAMES, ENV_NAMES_SHORT, MIN_EPISODES_PER_UPDATE, MIN_TRANSITIONS_PER_UPDATE, ITERATIONS, LR, FIRST_LR, SHARED_LR
+from networks import MultiHeadMLP
 
 device = torch.device("cuda")
 
@@ -44,12 +45,27 @@ def train(env_names):
     for env_name in env_names:
         log().add_plot(env_name + "_reward", ("episode", "step", "reward"))
     envs = [gym.make(name) for name in env_names]
-    agents = [PPO(state_dim=env.observation_space.shape[0], action_dim=env.action_space.shape[0], device=device) for env in envs]
+    agents = [PPO(state_dim=env.observation_space.shape[0], action_dim=env.action_space.shape[0], num_shared=len(envs) - 1, device=device) for env in envs]
+
+    shared_modules = list()
+    for i, j in itertools.combinations(range(len(agents)), 2):
+        actor_shared = MultiHeadMLP(256, 64, 32, 5).to(device)
+        critic_shared = MultiHeadMLP(256, 64, 32, 5).to(device)
+        shared_modules.append(actor_shared)
+        shared_modules.append(critic_shared)
+
+        agents[i].actor.add_shared(actor_shared)
+        agents[i].critic.add_shared(critic_shared)
+        agents[j].actor.add_shared(actor_shared)
+        agents[j].critic.add_shared(critic_shared)
 
     episodes_sampled = [0 for _ in range(len(envs))]
     steps_sampled = [0 for _ in range(len(envs))]
 
-    optimizer = torch.optim.Adam(itertools.chain(*[agent.parameters() for agent in agents]), lr=LR)
+    # TODO parameter groups
+    first_optimizer = torch.optim.Adam(itertools.chain(*[agent.first_parameters() for agent in agents]), lr=FIRST_LR)
+    shared_optimizer = torch.optim.Adam(itertools.chain(*[sh_m.parameters() for sh_m in shared_modules]), lr=SHARED_LR)
+    rest_optimizer = torch.optim.Adam(itertools.chain(*[agent.rest_parameters() for agent in agents]), lr=LR)
     for i in range(ITERATIONS):
         all_trajectories = [[] for _ in range(len(envs))]
         
@@ -66,9 +82,13 @@ def train(env_names):
 
         loss_generators = [agent.update(trajectories) for agent, trajectories in zip(agents, all_trajectories)]
         for losses in zip(*loss_generators):
-            optimizer.zero_grad()
+            first_optimizer.zero_grad()
+            shared_optimizer.zero_grad()
+            rest_optimizer.zero_grad()
             sum(losses).backward()
-            optimizer.step()
+            first_optimizer.step()
+            shared_optimizer.step()
+            rest_optimizer.step()
         
         log().save_logs()
     log().save_logs()
@@ -83,5 +103,5 @@ def init_random_seeds(RANDOM_SEED):
 
 if __name__ == "__main__":
     init_random_seeds(23)
-    init_logger("logdir", "tmp")
+    init_logger("logdir", "MultiTask")
     train(ENV_NAMES_SHORT)
